@@ -6,8 +6,6 @@
 #include<string>
 #include<vector>
 #include"symbolInfo.h"
-#include"scopeTable.h"
-#include"symbolTable.h"
 
 using namespace std;
 
@@ -17,31 +15,233 @@ int error_count=0;
 FILE *logout;
 FILE *tokenout;
 
-class SymbolInfo{
+
+class scopeTable
+{
+    static const int index=100;
+    int id,n;
+    symbolInfo* hashTable[index];
+
 public:
-	string symbol;
-	string type;
-	SymbolInfo(){
-		symbol="";type="";
-	}
-	SymbolInfo(string symbol,string type){
-		this->symbol=symbol;this->type=type;
-	}
-};
-class ScopeTable{
-	vector<SymbolInfo *> syminfo;
-	public:
-	void insert(SymbolInfo *s){
-		syminfo.push_back(s);
-	}
-	void print(){
-		for(int i=0;i<syminfo.size();i++){
-			fprintf(logout,"\n%s %s\n",syminfo[i]->symbol.c_str(),syminfo[i]->type.c_str());
-		}
-	}
+    scopeTable* parentScope;
+
+    void setId(int id)
+    {
+        this->id=id;
+    }
+
+    int getId()
+    {
+        return id;
+    }
+
+    //the constructor function allocates memory
+    scopeTable(int n)
+    {
+        this->n=n;
+        for(int i=0; i<n; i++)
+        {
+            hashTable[i] = new symbolInfo;
+            hashTable[i]->setName("null");
+            hashTable[i]->setType("null");
+            hashTable[i]->next=NULL;
+        }
+    }
+
+    //the destructor function frees the allocated memory
+    ~scopeTable()
+    {
+        for(int i=0; i<n; i++)
+        {
+            symbolInfo* ptr=hashTable[i];
+            symbolInfo* ptr2;
+            while(ptr->next!=NULL)
+            {
+                ptr2=ptr;
+                ptr=ptr->next;
+                delete ptr2;
+            }
+        }
+    }
+
+
+//A hash function that returns a specific key index
+    int hashFunction(string key)
+    {
+
+        int hashValue=0;
+
+        for(int i=0; i<key.size(); i++)
+        {
+            hashValue+= (int)key[i];
+        }
+        return hashValue%n;
+    }
+
+//Function to search a key
+    symbolInfo* lookUp(string name)
+    {
+        int bucket=hashFunction(name);
+        symbolInfo* ptr=hashTable[bucket];
+        symbolInfo* retPtr=NULL;
+        bool found = false;
+
+        while(ptr!=NULL)
+            {
+                if(ptr->getName()==name)
+                {
+                    //cout<<"No error here"<<endl<<endl;
+                    retPtr=ptr;
+                    break;
+                }
+                ptr=ptr->next;
+            }
+
+        return retPtr;
+
+    }
+
+//Function to insert a new entry
+    bool insertItem(string name, string type)
+    {
+        if(lookUp(name)!= NULL)
+        {
+           
+            return false;
+        }
+        else
+        {
+            
+            int index=hashFunction(name);
+            symbolInfo* ptr = new symbolInfo();
+
+            ptr->setName(name);
+            ptr->setType(type);
+            ptr->next=NULL;
+
+            if(hashTable[index]->getName() == "null")
+            {
+                hashTable[index]->setName(name);
+                hashTable[index]->setType(type);
+            }
+            else
+            {
+                symbolInfo* ptr2=hashTable[index];
+
+                while(ptr2->next!=NULL)
+                {
+                    ptr2=ptr2->next;
+                }
+                ptr2->next=ptr;
+            }
+            return true;
+        }
+    }
+
+//Function to delete an item
+    bool deleteItem(string name)
+    {
+        symbolInfo* ptr1;
+        symbolInfo* ptr2;
+        symbolInfo* dltPtr;
+
+        if(lookUp(name)==NULL)
+            return false;
+        else
+        {
+
+            int index=hashFunction(name);
+
+            if(hashTable[index]->getName() == name && hashTable[index]->next==NULL)
+            {
+                hashTable[index]->setName("null");
+                hashTable[index]->setType("null");
+                return true;
+            }
+            else if(hashTable[index]->getName() == name)
+            {
+                dltPtr=hashTable[index];
+                hashTable[index]=hashTable[index]->next;
+                delete dltPtr;
+                return true;
+            }
+            else
+            {
+                ptr1=hashTable[index]->next;
+                ptr2=hashTable[index];
+
+                while(ptr1!=NULL && ptr1->getName()!=name)
+                {
+                    ptr2=ptr1;
+                    ptr1=ptr1->next;
+                }
+                if(ptr1->getName()==name)
+                {
+                    dltPtr=ptr1;
+                    ptr1=ptr1->next;
+                    ptr2->next=ptr1;
+                    delete dltPtr;
+                    return true;
+                }
+
+            }
+        }
+    }
+
+//Function to print the hash table
+    void printHashTable()
+    {
+        for(int i=0; i<n; i++)
+        {
+            
+            symbolInfo*  ptr=hashTable[i];
+
+            while(ptr != NULL)
+            {
+                if(ptr->getName()!="null")
+                {
+                    fprintf(logout,"%d--> <%s:%s>\n",i,ptr->getName().c_str(),ptr->getType().c_str());
+                }   
+                ptr=ptr->next;
+            }
+            
+        }
+        
+    }
+
+    //function to find the row of an item
+    int rowLocation(string name)
+    {
+        int s=0;
+        int x=hashFunction(name);
+        symbolInfo* ptr=hashTable[x];
+
+        while(ptr!=NULL)
+        {
+            if(ptr->getName()==name)
+                return s;
+            else
+            {
+                s++;
+                ptr=ptr->next;
+            }
+        }
+        return s;
+    }
+
+    //function to print the location of an item
+    int  columnLocation(string name)
+    {
+        if(lookUp(name)==NULL)
+            return -1;
+        else
+            return hashFunction(name);
+    }
+
 };
 
-ScopeTable st;
+
+scopeTable* st=new scopeTable(10);
 
 %}
 
@@ -247,28 +447,26 @@ ERRDOUBLETWO [0-9]+"E"[0-9]+"."[0-9]*
 {DIGIT}+ 	{
 				fprintf(tokenout,"<CONST_INT,%s>",yytext);
 				fprintf(logout,"Line no %d: TOKEN <CONST_INT> Lexeme %s found\n",line_count,yytext);
-
-				SymbolInfo *si=new SymbolInfo(string(yytext),"CONST_INT");
-				st.insert(si);
+				st->insertItem(string(yytext),"CONST_INT");
+                st->printHashTable();
 			}
 
 {DIGIT}+"."{DIGIT}*  |
-{DIGIT}+"E"{DIGIT}+
-  {
+{DIGIT}+"E"{DIGIT}+    {
 				fprintf(tokenout,"<CONST_FLOAT,%s>",yytext);
 				fprintf(logout,"Line no %d: TOKEN <CONST_FLOAT> Lexeme %s found\n",line_count,yytext);
-				SymbolInfo *si=new SymbolInfo(string(yytext),"CONST_FLOAT");
-				st.insert(si);
+				st->insertItem(string(yytext),"CONST_FLOAT");
+                st->printHashTable();
 			}
 
 {CHARACTER}       {
                     string str="\0";
                    if(strlen(yytext)==3)
                        {str+=yytext[1];
-				fprintf(tokenout,"<CONST_CHAR,%s>",str;
-				fprintf(logout,"Line no %d: TOKEN <CONST_CHAR> Lexeme %s found\n",line_count,str);
-				SymbolInfo *si=new SymbolInfo(string(str),"CONST_CHAR");
-				st.insert(si);
+				fprintf(tokenout,"<CONST_CHAR,%s>",str.c_str());
+				fprintf(logout,"Line no %d: TOKEN <CONST_CHAR> Lexeme %s found\n",line_count,str.c_str());
+				st->insertItem(string(yytext),"CONST_CHAR");
+                st->printHashTable();
                     }
                     else
                         {
@@ -279,15 +477,15 @@ fprintf(logout,"Syntax error in line %d\n",line_count);
 {IDENTIFIER}        {
 				fprintf(tokenout,"<ID,%s>",yytext);
 				fprintf(logout,"Line no %d: TOKEN <ID> Lexeme %s found\n",line_count,yytext);
-				SymbolInfo *si=new SymbolInfo(string(yytext),"ID");
-				st.insert(si);
+				st->insertItem(string(yytext),"ID");
+                st->printHashTable();
 			}
 
 {STRING}        {
 				fprintf(tokenout,"<STRING,%s>",yytext);
 				fprintf(logout,"Line no %d: TOKEN <STRING> Lexeme %s found\n",line_count,yytext);
-				SymbolInfo *si=new SymbolInfo(string(yytext),"STRING");
-				st.insert(si);
+				st->insertItem(string(yytext),"STRING");
+                st->printHashTable();
 			}
 {COMMENT}       {
 				fprintf(logout,"Line no %d: TOKEN <COMMENT> Lexeme %s found\n",line_count,yytext);
@@ -306,12 +504,15 @@ fprintf(logout,"Syntax error in line %d\n",line_count);
         error_count++;
 }
 
-.-[_a-zA-Z]{IDENTIFIER}
-{
+.-[_a-zA-Z]{IDENTIFIER}         {
         fprintf(logout,"Illegal Identifier name in line no %d\n", line_count);
         error_count++;
 }
 
+. {
+    fprintf(logout,"Unrecognised Symbol");
+        error_count++;
+  }
 
 
 %%
@@ -335,7 +536,7 @@ int main(int argc,char *argv[]){
     fprintf(logout, "Total Errors :%d", error_count);
 	yyin= fin;
 	yylex();
-	st.print();
+	//st->printHashTable();
 	fclose(yyin);
 	fclose(tokenout);
 	fclose(logout);
