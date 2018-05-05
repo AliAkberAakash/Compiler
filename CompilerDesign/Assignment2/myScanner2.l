@@ -12,6 +12,7 @@
 using namespace std;
 
 int line_count=1;
+int error_count=0;
 
 FILE *logout;
 FILE *tokenout;
@@ -48,10 +49,13 @@ WHITESPACE [ \t\f\r\v]+
 LETTER [a-zA-Z]
 DIGIT [0-9]
 NEWLINE \n
-CHARACTER [.]-[\t\\\"\a\f\r\b\v\0]
+CHARACTER "'"[.]-[\t\\\"\a\f\r\b\v\0]"'"
 IDENTIFIER [a-zA-Z][_a-zA-Z0-9]*
 STRING [.]*
 COMMENT "/*"(.|\n)*"*/"
+ERRDOUBLE [0-9]*"."[0-9]*"."[0-9]
+ERRDOUBLETWO [0-9]+"E"[0-9]+"."[0-9]*
+
 
 %%
 
@@ -248,7 +252,9 @@ COMMENT "/*"(.|\n)*"*/"
 				st.insert(si);
 			}
 
-{DIGIT}+"."{DIGIT}*    {
+{DIGIT}+"."{DIGIT}*  |
+{DIGIT}+"E"{DIGIT}+
+  {
 				fprintf(tokenout,"<CONST_FLOAT,%s>",yytext);
 				fprintf(logout,"Line no %d: TOKEN <CONST_FLOAT> Lexeme %s found\n",line_count,yytext);
 				SymbolInfo *si=new SymbolInfo(string(yytext),"CONST_FLOAT");
@@ -256,10 +262,19 @@ COMMENT "/*"(.|\n)*"*/"
 			}
 
 {CHARACTER}       {
-				fprintf(tokenout,"<CONST_CHAR,%s>",yytext);
-				fprintf(logout,"Line no %d: TOKEN <CONST_CHAR> Lexeme %s found\n",line_count,yytext);
-				SymbolInfo *si=new SymbolInfo(string(yytext),"CONST_CHAR");
+                    string str="\0";
+                   if(strlen(yytext)==3)
+                       {str+=yytext[1];
+				fprintf(tokenout,"<CONST_CHAR,%s>",str;
+				fprintf(logout,"Line no %d: TOKEN <CONST_CHAR> Lexeme %s found\n",line_count,str);
+				SymbolInfo *si=new SymbolInfo(string(str),"CONST_CHAR");
 				st.insert(si);
+                    }
+                    else
+                        {
+fprintf(logout,"Syntax error in line %d\n",line_count);
+                error_count++;
+}
 			}
 {IDENTIFIER}        {
 				fprintf(tokenout,"<ID,%s>",yytext);
@@ -281,6 +296,24 @@ COMMENT "/*"(.|\n)*"*/"
 
 {WHITESPACE}        { /*does nothing*/ }
 
+{ERRDOUBLE}     {
+        fprintf(logout,"Error in line %d\n", line_count);
+        error_count++;
+}
+
+{ERRDOUBLETWO}     {
+        fprintf(logout,"Error in line %d\n", line_count);
+        error_count++;
+}
+
+.-[_a-zA-Z]{IDENTIFIER}
+{
+        fprintf(logout,"Illegal Identifier name in line no %d\n", line_count);
+        error_count++;
+}
+
+
+
 %%
 
 int main(int argc,char *argv[]){
@@ -299,6 +332,7 @@ int main(int argc,char *argv[]){
 	logout= fopen("log.txt","w");
 	tokenout= fopen("token.txt","w");
 
+    fprintf(logout, "Total Errors :%d", error_count);
 	yyin= fin;
 	yylex();
 	st.print();
